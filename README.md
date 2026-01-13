@@ -91,10 +91,7 @@ CREATE OR REPLACE STREAMLIT airport_analytics_dashboard
 GRANT USAGE ON STREAMLIT airport_analytics_installer TO ROLE PUBLIC;
 GRANT USAGE ON STREAMLIT airport_analytics_dashboard TO ROLE PUBLIC;
 
--- Step 7: Get Streamlit App URL
-SELECT SYSTEM$GET_STREAMLIT_URL('AVIA_INSTALLER.PUBLIC.airport_analytics_installer') AS app_url;
-
--- Step 8: Verify Streamlit App creation
+-- Step 7: Verify Streamlit App creation
 SHOW STREAMLITS LIKE 'airport_analytics_%';
 ```
 
@@ -110,9 +107,8 @@ SHOW STREAMLITS LIKE 'airport_analytics_%';
 2. Select an airport from the dropdown (searches Overture Maps international airports)
 3. Configure settings:
    - **Database Name**: Auto-generated as `AIRPORT_XXX` (e.g., `AIRPORT_SAN` for San Diego)
-   - **Warehouse**: Select warehouse for data pipelines
    - **API Keys**: Provide Aviationstack API key and GitHub PAT
-   - **Backfill Days**: Choose 0-30 days of historical data to load
+   - **Backfill Days**: Choose 0-30 days of historical data to load. If not provided, Callsights from ADSB won't be matched with actual flights.
 4. Click **Generate SQL** to review the deployment scripts
 5. Click **Execute in Snowflake** to deploy the infrastructure
 
