@@ -1,4 +1,4 @@
-# Airport Analytics Platform - Deployment Guide
+# Airport Analytics Solution - Deployment Guide
 
 A Snowflake-native solution for real-time aviation analytics using ADS-B flight tracking, flight schedules, and airport infrastructure data. Deploy complete per-airport analytics databases with automated pipelines and interactive dashboards.
 
