@@ -12,7 +12,7 @@ A Snowflake-native solution for real-time aviation analytics using ADS-B flight 
 - **Infrastructure Visualization**: Dynamic rendering of runways, taxiways, gates, and terminals
 - **Multi-Airport Support**: Deploy separate databases for multiple airports
 
-![Live View](https://raw.githubusercontent.com/sfc-gh-obielov/sfguide-aviation-ops-intelligence/main/assets/live_view.png)
+![Live View](https://github.com/sfc-gh-obielov/sfguide-aviation-ops-intelligence/blob/main/assets/live_view.png)
 
 ---
 
