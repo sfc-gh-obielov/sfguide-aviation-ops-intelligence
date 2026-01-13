@@ -37,15 +37,8 @@ A Snowflake-native solution for real-time aviation analytics using ADS-B flight 
 
 1. **Aviationstack API Key (Optional)** (required for flight schedules)
    - Sign up at [aviationstack.com](https://aviationstack.com)
-   - Free tier: 100 requests/month (sufficient for 1-2 airports)
+   - Basic tier: 10000 requests/month (sufficient for several airports)
    - Paid tier recommended for production
-
-<video src="https://github.com/sfc-gh-obielov/sfguide-aviation-ops-intelligence/blob/main/assets/installer.gif" controls></video>
-
-![Installer demo](https://github.com/sfc-gh-obielov/sfguide-aviation-ops-intelligence/blob/main/assets/installer.gif)
-
-
----
 
 ## 🚀 Deployment 
 
@@ -73,29 +66,6 @@ CREATE OR REPLACE GIT REPOSITORY AVIA_INSTALLER.PUBLIC.avia_ops_repo
 
 -- Step 4: Fetch latest files from repository
 ALTER GIT REPOSITORY avia_ops_repo FETCH;
-
--- Step 5: Create Streamlit App from Git Repository
-CREATE OR REPLACE STREAMLIT AVIA_INSTALLER.PUBLIC.airport_analytics_installer
-  ROOT_LOCATION = '@avia_ops_repo/branches/main/installer'
-  MAIN_FILE = 'streamlit_app.py'
-  QUERY_WAREHOUSE = <your_warehouse_name>  -- Replace with your warehouse
-  TITLE = 'Airport Analytics Installer'
-  COMMENT = 'Installer for Airport Analytics Platform - generates and deploys airport infrastructure';
-
-  -- Step 6: Create Streamlit App from Git Repository
-CREATE OR REPLACE STREAMLIT AVIA_INSTALLER.PUBLIC.airport_analytics_dashboard
-  ROOT_LOCATION = '@avia_ops_repo/branches/main/dashboard'
-  MAIN_FILE = 'streamlit_app.py'
-  QUERY_WAREHOUSE = <your_warehouse_name> -- Replace with your warehouse
-  TITLE = 'Airport Analytics Dashboard'
-  COMMENT = 'Dashboard for Airport Analytics Platform';
-
--- Step 6: Grant permissions (if needed for non-ACCOUNTADMIN users)
-GRANT USAGE ON STREAMLIT AVIA_INSTALLER.PUBLIC.airport_analytics_installer TO ROLE PUBLIC;
-GRANT USAGE ON STREAMLIT AVIA_INSTALLER.PUBLIC.airport_analytics_dashboard TO ROLE PUBLIC;
-
--- Step 7: Verify Streamlit App creation
-SHOW STREAMLITS LIKE 'airport_analytics_%';
 ```
 
 **Note**: Replace `<your_warehouse_name>` with your warehouse (e.g., `COMPUTE_WH`). Replace `AVIA_INSTALLER.PUBLIC` with your chosen database and schema. Replace `<your_role>` with the role that needs access.
@@ -104,16 +74,18 @@ SHOW STREAMLITS LIKE 'airport_analytics_%';
 
 ## 📖 Usage Workflow
 
-### 1. Run the Installer
+### 1. Create the Installer App
 
-https://github.com/sfc-gh-obielov/sfguide-aviation-ops-intelligence/raw/refs/heads/main/assets/installer.mp4
+Follow this video guide:
+![Installer demo](https://github.com/sfc-gh-obielov/sfguide-aviation-ops-intelligence/blob/main/assets/installer.gif)
 
+### 2. Install the solution
 1. Open the **Installer** Streamlit app
 2. Select an airport from the dropdown (searches Overture Maps international airports)
 3. Configure settings:
    - **Database Name**: Auto-generated as `AIRPORT_XXX` (e.g., `AIRPORT_SAN` for San Diego)
-   - **API Keys**: Provide Aviationstack API key and GitHub PAT
-   - **Backfill Days**: Choose 0-30 days of historical data to load. If not provided, Callsights from ADSB won't be matched with actual flights.
+   - **API Keys**: Provide Aviationstack API key if you have it. If not provided, Callsights from ADSB won't be matched with actual flights.
+   - **Backfill Days**: Choose 0-30 days of historical data to load.
 4. Click **Generate SQL** to review the deployment scripts
 5. Click **Execute in Snowflake** to deploy the infrastructure
 
@@ -130,11 +102,10 @@ https://github.com/sfc-gh-obielov/sfguide-aviation-ops-intelligence/raw/refs/hea
 After execution completes (~5-10 minutes):
 - Check task status in the Installer app
 - Wait for initial data ingestion (1-2 minutes for first ADS-B points)
-- Historical backfill runs daily at 2 AM UTC (or on-demand via procedures)
 
 ### 3. Open the Dashboard
 
-1. Open the **Dashboard** Streamlit app
+1. Create the **Dashboard** Streamlit app same way as installer, but use /dashboard/streamlit_app.py file
 2. Select your airport from the dropdown (e.g., "San Diego International Airport (SAN)")
 3. Explore the 8 dashboard pages:
    - **Flight Tracker**: Individual flight paths with altitude profiles
@@ -175,15 +146,12 @@ sd_poc/
 │   │   └── 8_Performance.py
 │   └── images/                  # Dashboard assets
 │
-├── COMPREHENSIVE_README.md      # Technical documentation (1900+ lines)
-├── README.md                    # This deployment guide
-├── snowflake.yml               # Snowflake CLI config (optional)
-└── old/                        # Legacy docs (can be ignored)
+└──README.md                    # This deployment guide
 ```
 
 **Key Files:**
 - **installer/streamlit_app.py**: Generates and deploys SQL for airport infrastructure
-- **dashboard/streamlit_app.py**: Main dashboard entry point (redirects to Flight Tracker)
+- **dashboard/streamlit_app.py**: Main dashboard entry point 
 - **dashboard/utils.py**: Shared utilities for airport selection, infrastructure rendering, time filters
 
 ---
@@ -206,34 +174,6 @@ sd_poc/
 ```sql
 USE ROLE ACCOUNTADMIN;
 -- Then re-run installer
-```
-
-#### 3. "External Access Integration already exists" error
-
-**Cause**: EAI names must be unique per airport. Installer uses `AIRPORT_XXX_V5_*_EAI` pattern.
-
-**Fix**: This is expected if re-running installer. The installer uses `CREATE OR REPLACE` to handle this.
-
-#### 4. Low schedule match rate (<30%) in Monitoring page
-
-**Possible causes**:
-- Aviationstack API key exhausted (check quota at aviationstack.com)
-- Flight schedule ingestion task not running
-- Enrichment task not running
-
-**Fix**:
-```sql
--- Check task status
-USE DATABASE AIRPORT_<XXX>;
-USE SCHEMA V5;
-SHOW TASKS;
-
--- Resume suspended tasks
-ALTER TASK TASK_FLIGHT_SCHEDULE_HOURLY RESUME;
-ALTER TASK TASK_ENRICH_ADSB_HOURLY RESUME;
-
--- Manually trigger enrichment
-CALL PROC_ENRICH_ADSB_WITH_SCHEDULE(24);  -- Enrich last 24 hours
 ```
 
 #### 5. No data appearing in Dashboard
@@ -259,56 +199,9 @@ SHOW DYNAMIC TABLES IN SCHEMA AIRPORT_<XXX>.V5;
 CALL AIRPORT_<XXX>.V5.PROC_INGEST_ADSB();
 ```
 
-#### 6. GitHub integration fails with "Repository not found"
 
-**Cause**: API integration prefix doesn't match repository URL, or PAT lacks permissions.
-
-**Fix**:
-```sql
--- Verify API integration allowed prefixes
-SHOW API INTEGRATIONS LIKE 'github_api_integration';
-
--- Verify Git repository
-SHOW GIT REPOSITORIES;
-
--- Test repository access (fully qualified)
-LS @AVIA_INSTALLER.PUBLIC.avia_fleet_repo/branches/poc-stable-v5;
-```
-
-If listing fails, regenerate your GitHub PAT with correct permissions and recreate the secret.
-
-#### 7. Warehouse sizing issues
-
-**Symptoms**: Slow queries, task failures, high credit consumption.
-
-**Recommendations**:
-- **Installer app**: XS-S warehouse (short-lived operations)
-- **Dashboard app**: M-L warehouse (interactive queries)
-- **Data pipeline tasks**: M-L warehouse (continuous ingestion)
-- **Backfill task**: L-XL warehouse (large TAR file processing)
-
-**Fix**:
-```sql
--- Update Streamlit app warehouse (fully qualified)
-ALTER STREAMLIT AVIA_INSTALLER.PUBLIC.airport_analytics_dashboard 
-  SET QUERY_WAREHOUSE = <larger_warehouse>;
-
--- Update task warehouse (fully qualified)
-ALTER TASK AIRPORT_<XXX>.V5.TASK_INGEST_ADSB 
-  SET WAREHOUSE = <your_warehouse>;
-ALTER TASK AIRPORT_<XXX>.V5.TASK_INGEST_ADSB RESUME;
-```
-
----
 
 ## 📚 Additional Resources
-
-- **[COMPREHENSIVE_README.md](COMPREHENSIVE_README.md)**: Complete technical documentation covering:
-  - Architecture and data model
-  - Detailed table/procedure reference
-  - Data flow diagrams
-  - Task orchestration
-  - Advanced troubleshooting
   
 - **[Snowflake Streamlit Documentation](https://docs.snowflake.com/en/developer-guide/streamlit/about-streamlit)**: Official Streamlit in Snowflake docs
 
@@ -324,19 +217,8 @@ ALTER TASK AIRPORT_<XXX>.V5.TASK_INGEST_ADSB RESUME;
 
 - **Never commit** API keys or PAT tokens to Git
 - Store secrets in Snowflake `SECRET` objects (as shown in Option 2)
-- Use `.gitignore` to exclude `aviationstack_api_key.txt` and `pat_*.txt` files
 - Rotate GitHub PATs regularly (recommend 90-day expiration)
 - Use role-based access control (RBAC) for Streamlit apps in production
-
----
-
-## 🆘 Support
-
-For issues or questions:
-1. Check this README troubleshooting section
-2. Review [COMPREHENSIVE_README.md](COMPREHENSIVE_README.md) for technical details
-3. Check Monitoring page in Dashboard for data pipeline health
-4. Review Snowflake task history: `SELECT * FROM TABLE(INFORMATION_SCHEMA.TASK_HISTORY())`
 
 ---
 
