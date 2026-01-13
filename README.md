@@ -58,13 +58,13 @@ USE SCHEMA PUBLIC;
 
 -- Step 2: Create API Integration for GitHub (if not exists)
 -- Note: For PUBLIC repositories, no GitHub PAT is required
-CREATE API INTEGRATION IF NOT EXISTS github_api_integration
+CREATE API INTEGRATION IF NOT EXISTS AVIA_INSTALLER.PUBLIC.github_api_integration
   API_PROVIDER = git_https_api
   API_ALLOWED_PREFIXES = ('https://github.com/sfc-gh-obielov/')
   ENABLED = TRUE;
 
 -- Step 3: Create Git Repository Object (NO credentials needed for public repos)
-CREATE OR REPLACE GIT REPOSITORY avia_ops_repo
+CREATE OR REPLACE GIT REPOSITORY AVIA_INSTALLER.PUBLIC.avia_ops_repo
   API_INTEGRATION = github_api_integration
   ORIGIN = 'https://github.com/sfc-gh-obielov/sfguide-aviation-ops-intelligence';
 
@@ -72,7 +72,7 @@ CREATE OR REPLACE GIT REPOSITORY avia_ops_repo
 ALTER GIT REPOSITORY avia_ops_repo FETCH;
 
 -- Step 5: Create Streamlit App from Git Repository
-CREATE OR REPLACE STREAMLIT airport_analytics_installer
+CREATE OR REPLACE STREAMLIT AVIA_INSTALLER.PUBLIC.airport_analytics_installer
   ROOT_LOCATION = '@avia_ops_repo/branches/main/installer'
   MAIN_FILE = 'streamlit_app.py'
   QUERY_WAREHOUSE = <your_warehouse_name>  -- Replace with your warehouse
@@ -80,7 +80,7 @@ CREATE OR REPLACE STREAMLIT airport_analytics_installer
   COMMENT = 'Installer for Airport Analytics Platform - generates and deploys airport infrastructure';
 
   -- Step 6: Create Streamlit App from Git Repository
-CREATE OR REPLACE STREAMLIT airport_analytics_dashboard
+CREATE OR REPLACE STREAMLIT AVIA_INSTALLER.PUBLIC.airport_analytics_dashboard
   ROOT_LOCATION = '@avia_ops_repo/branches/main/dashboard'
   MAIN_FILE = 'streamlit_app.py'
   QUERY_WAREHOUSE = <your_warehouse_name> -- Replace with your warehouse
@@ -88,8 +88,8 @@ CREATE OR REPLACE STREAMLIT airport_analytics_dashboard
   COMMENT = 'Dashboard for Airport Analytics Platform';
 
 -- Step 6: Grant permissions (if needed for non-ACCOUNTADMIN users)
-GRANT USAGE ON STREAMLIT airport_analytics_installer TO ROLE PUBLIC;
-GRANT USAGE ON STREAMLIT airport_analytics_dashboard TO ROLE PUBLIC;
+GRANT USAGE ON STREAMLIT AVIA_INSTALLER.PUBLIC.airport_analytics_installer TO ROLE PUBLIC;
+GRANT USAGE ON STREAMLIT AVIA_INSTALLER.PUBLIC.airport_analytics_dashboard TO ROLE PUBLIC;
 
 -- Step 7: Verify Streamlit App creation
 SHOW STREAMLITS LIKE 'airport_analytics_%';

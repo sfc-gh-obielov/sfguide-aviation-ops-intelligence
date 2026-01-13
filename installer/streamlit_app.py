@@ -44,7 +44,7 @@ def _normalize_git_repo_stage_base(stage_base: str) -> str:
     """
     s = (stage_base or "").strip()
     if not s:
-        return "@AVIA_INSTALLER.PUBLIC.aviation_ops_repo/branches/main"
+        return "@AVIA_INSTALLER.PUBLIC.AVIA_OPS_REPO/branches/main"
     if not s.startswith("@"):
         s = "@" + s
 
@@ -4465,7 +4465,7 @@ def generate_all_sql(
     schema: str,
     warehouse: str,
     api_key: str = None,
-    git_repo_stage_base: str = "@AVIA_INSTALLER.PUBLIC.aviation_ops_repo/branches/main",
+    git_repo_stage_base: str = "@AVIA_INSTALLER.PUBLIC.AVIA_OPS_REPO/branches/main",
     adsb_history_backfill_days: int = 5,
 ) -> dict:
     """Generate all SQL files.
@@ -4792,7 +4792,7 @@ def main():
     with st.expander("Advanced: Git repo stage path", expanded=False):
         git_repo_stage_base_input = st.text_input(
             "Git repo stage base",
-            value="@AVIA_INSTALLER.PUBLIC.aviation_ops_repo/branches/main",
+            value="@AVIA_INSTALLER.PUBLIC.AVIA_OPS_REPO/branches/main",
             help="Example: @REPO_NAME/branches/main (or fully-qualified @DB.SCHEMA.REPO_NAME/branches/main). Do not include a trailing slash.",
         )
         git_repo_stage_base = _normalize_git_repo_stage_base(git_repo_stage_base_input)
