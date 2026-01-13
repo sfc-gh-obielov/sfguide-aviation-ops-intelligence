@@ -40,178 +40,66 @@ A Snowflake-native solution for real-time aviation analytics using ADS-B flight 
    - Free tier: 100 requests/month (sufficient for 1-2 airports)
    - Paid tier recommended for production
 
-2. **GitHub Personal Access Token** (If you access installer and Dashboard via GitHub integration)
-   - Generate at GitHub Settings → Developer Settings → Personal Access Tokens
-   - Scopes needed: `public_repo` (read-only)
+
 
 ---
 
-## 🚀 Deployment Options
+## 🚀 Deployment 
 
-Choose one of two deployment methods:
-
-### Option 1: Manual File Upload
-
-**Best for**: Quick setup, testing, or when you don't have a Git repository.
-
-#### Step 1: Create Installer Streamlit App
-
-1. Log in to your Snowflake account
-2. Navigate to **Streamlit** in the left sidebar
-3. Click **+ Streamlit App**
-4. Configure:
-   - **Name**: `AIRPORT_ANALYTICS_INSTALLER`
-   - **Warehouse**: Select an XS or S warehouse
-   - **App Location**: Choose database and schema (e.g., `AVIA_INSTALLER.PUBLIC`)
-5. Click **Create**
-6. In the file browser on the left:
-   - Upload `installer/streamlit_app.py` (main file)
-   - Upload `installer/airlines.csv` (reference data)
-7. Set `streamlit_app.py` as the main file
-8. Click **Run**
-
-**Note on API Key File**: Create `aviationstack_api_key.txt` with your API key:
-```
-your_aviationstack_api_key_here
-```
-
-#### Step 2: Create Dashboard Streamlit App
-
-1. Navigate to **Streamlit** → **+ Streamlit App**
-2. Configure:
-   - **Name**: `AIRPORT_ANALYTICS_DASHBOARD`
-   - **Warehouse**: Select an M or L warehouse
-   - **App Location**: Choose database and schema (e.g., `AVIA_INSTALLER.PUBLIC`)
-3. Click **Create**
-4. Upload the entire `dashboard/` folder structure:
-   - `dashboard/streamlit_app.py` (main file)
-   - `dashboard/utils.py`
-   - `dashboard/pages/` folder with all 8 page files:
-     - `1_Flight_Tracker.py`
-     - `2_Airport_Activity.py`
-     - `3_Runway_Crossings.py`
-     - `4_Traffic_Analysis.py`
-     - `5_Gate_Analysis.py`
-     - `6_Operations.py`
-     - `7_Monitoring.py`
-     - `8_Performance.py`
-   - `dashboard/images/` folder with assets
-5. Set `streamlit_app.py` as the main file
-6. Click **Run**
-
----
-
-### Option 2: GitHub Integration
-
-**Best for**: Production deployments, version control, automated updates.
-
-#### Step 1: Prepare Your Repository
-
-1. Fork or clone this repository to your GitHub account/organization
-2. Ensure the repository structure has:
-   - `/installer` folder with Streamlit app
-   - `/dashboard` folder with Streamlit app
-3. Note your repository URL (e.g., `https://github.com/your-org/sd_poc`)
-
-#### Step 2: Set Up Secrets in Snowflake
-
-Execute these queries in a Snowflake worksheet (replace placeholders):
+Execute these queries in a Snowflake workworkspaces (replace placeholders):
 
 ```sql
--- Use the database where you'll store secrets
+-- Step 1: Set context (replace with your preferred database/schema)
+CREATE DATABASE IF NOT EXISTS AVIA_INSTALLER;
+-- Step 1: Set context (replace with your preferred database/schema)
+USE ROLE ACCOUNTADMIN;
 USE DATABASE AVIA_INSTALLER;
 USE SCHEMA PUBLIC;
 
--- Create GitHub PAT secret
-CREATE OR REPLACE SECRET github_pat
-  TYPE = PASSWORD
-  USERNAME = 'github'
-  PASSWORD = '<your_github_personal_access_token>';
-
--- Create Aviationstack API key secret (optional - can also be in file)
-CREATE OR REPLACE SECRET aviationstack_key
-  TYPE = PASSWORD
-  USERNAME = 'aviationstack'
-  PASSWORD = '<your_aviationstack_api_key>';
-```
-
-#### Step 3: Create API Integration for GitHub
-
-```sql
--- Create API integration (requires ACCOUNTADMIN or CREATE INTEGRATION privilege)
-CREATE OR REPLACE API INTEGRATION github_api_integration
+-- Step 2: Create API Integration for GitHub (if not exists)
+-- Note: For PUBLIC repositories, no GitHub PAT is required
+CREATE API INTEGRATION IF NOT EXISTS github_api_integration
   API_PROVIDER = git_https_api
-  API_ALLOWED_PREFIXES = ('https://github.com/<your-org>/')
+  API_ALLOWED_PREFIXES = ('https://github.com/sfc-gh-obielov/')
   ENABLED = TRUE;
-```
 
-**Note**: Replace `<your-org>` with your GitHub organization or username.
-
-#### Step 4: Create Git Repository Object
-
-```sql
--- Create Git repository reference (fully qualified)
-CREATE OR REPLACE GIT REPOSITORY AVIA_INSTALLER.PUBLIC.avia_fleet_repo
+-- Step 3: Create Git Repository Object (NO credentials needed for public repos)
+CREATE OR REPLACE GIT REPOSITORY avia_ops_repo
   API_INTEGRATION = github_api_integration
-  ORIGIN = 'https://github.com/<your-org>/sd_poc'
-  GIT_CREDENTIALS = github_pat;
+  ORIGIN = 'https://github.com/sfc-gh-obielov/sfguide-aviation-ops-intelligence';
+  -- Note: GIT_CREDENTIALS parameter is OPTIONAL and only needed for private repositories
 
--- Fetch latest files from repository
-ALTER GIT REPOSITORY AVIA_INSTALLER.PUBLIC.avia_fleet_repo FETCH;
+-- Step 4: Fetch latest files from repository
+ALTER GIT REPOSITORY avia_ops_repo FETCH;
 
--- Verify repository is accessible
-SHOW GIT REPOSITORIES;
-
--- List files in repository (optional verification)
-LS @AVIA_INSTALLER.PUBLIC.avia_fleet_repo/branches/poc-stable-v5;
-```
-
-**Note**: Replace `<your-org>` and repository name as appropriate. Use branch name `poc-stable-v5` or your preferred branch. Replace `AVIA_INSTALLER.PUBLIC` with your chosen database and schema.
-
-#### Step 5: Create Installer Streamlit App from Git
-
-```sql
--- Create Installer app (fully qualified)
-CREATE OR REPLACE STREAMLIT AVIA_INSTALLER.PUBLIC.airport_analytics_installer
-  ROOT_LOCATION = '@AVIA_INSTALLER.PUBLIC.avia_fleet_repo/branches/poc-stable-v5/installer'
+-- Step 5: Create Streamlit App from Git Repository
+CREATE OR REPLACE STREAMLIT airport_analytics_installer
+  ROOT_LOCATION = '@avia_ops_repo/branches/main/installer'
   MAIN_FILE = 'streamlit_app.py'
-  QUERY_WAREHOUSE = <your_warehouse_name>
-  TITLE = 'Airport Analytics Installer';
+  QUERY_WAREHOUSE = <your_warehouse_name>  -- Replace with your warehouse
+  TITLE = 'Airport Analytics Installer'
+  COMMENT = 'Installer for Airport Analytics Platform - generates and deploys airport infrastructure';
 
--- Grant usage if needed (for non-ACCOUNTADMIN users)
-GRANT USAGE ON STREAMLIT AVIA_INSTALLER.PUBLIC.airport_analytics_installer TO ROLE <your_role>;
+  -- Step 6: Create Streamlit App from Git Repository
+CREATE OR REPLACE STREAMLIT airport_analytics_dashboard
+  ROOT_LOCATION = '@avia_ops_repo/branches/main/dashboard'
+  MAIN_FILE = 'streamlit_app.py'
+  QUERY_WAREHOUSE = <your_warehouse_name> -- Replace with your warehouse
+  TITLE = 'Airport Analytics Dashboard'
+  COMMENT = 'Dashboard for Airport Analytics Platform';
+
+-- Step 6: Grant permissions (if needed for non-ACCOUNTADMIN users)
+GRANT USAGE ON STREAMLIT airport_analytics_installer TO ROLE PUBLIC;
+GRANT USAGE ON STREAMLIT airport_analytics_dashboard TO ROLE PUBLIC;
+
+-- Step 7: Get Streamlit App URL
+SELECT SYSTEM$GET_STREAMLIT_URL('AVIA_INSTALLER.PUBLIC.airport_analytics_installer') AS app_url;
+
+-- Step 8: Verify Streamlit App creation
+SHOW STREAMLITS LIKE 'airport_analytics_%';
 ```
 
 **Note**: Replace `<your_warehouse_name>` with your warehouse (e.g., `COMPUTE_WH`). Replace `AVIA_INSTALLER.PUBLIC` with your chosen database and schema. Replace `<your_role>` with the role that needs access.
-
-#### Step 6: Create Dashboard Streamlit App from Git
-
-```sql
--- Create Dashboard app (fully qualified)
-CREATE OR REPLACE STREAMLIT AVIA_INSTALLER.PUBLIC.airport_analytics_dashboard
-  ROOT_LOCATION = '@AVIA_INSTALLER.PUBLIC.avia_fleet_repo/branches/poc-stable-v5/dashboard'
-  MAIN_FILE = 'streamlit_app.py'
-  QUERY_WAREHOUSE = <your_warehouse_name>
-  TITLE = 'Airport Analytics Dashboard';
-
--- Grant usage if needed
-GRANT USAGE ON STREAMLIT AVIA_INSTALLER.PUBLIC.airport_analytics_dashboard TO ROLE <your_role>;
-```
-
-#### Step 7: Verify Deployment
-
-```sql
--- List all Streamlit apps
-SHOW STREAMLITS;
-
--- Check app details (fully qualified)
-DESCRIBE STREAMLIT AVIA_INSTALLER.PUBLIC.airport_analytics_installer;
-DESCRIBE STREAMLIT AVIA_INSTALLER.PUBLIC.airport_analytics_dashboard;
-
--- Get app URL (use fully qualified name)
-SELECT SYSTEM$GET_STREAMLIT_URL('AVIA_INSTALLER.PUBLIC.airport_analytics_installer');
-SELECT SYSTEM$GET_STREAMLIT_URL('AVIA_INSTALLER.PUBLIC.airport_analytics_dashboard');
-```
 
 ---
 
