@@ -4,6 +4,8 @@ A Snowflake-native solution for real-time aviation analytics using ADS-B flight 
 
 ## ✈️ Key Features
 
+<img src="https://raw.githubusercontent.com/sfc-gh-obielov/sfguide-aviation-ops-intelligence/main/assets/live_view.png" alt="Live view" width="800 />
+
 - **Real-time Flight Tracking**: Live ADS-B ingestion every minute
 - **Historical Backfill**: Automated download of historical ADS-B data from GitHub releases
 - **Flight Schedule Integration**: Hourly ingestion from Aviationstack API with automated matching
