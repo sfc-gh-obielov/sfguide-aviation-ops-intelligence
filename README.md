@@ -4,8 +4,6 @@ A Snowflake-native solution for real-time aviation analytics using ADS-B flight 
 
 ## ✈️ Key Features
 
-![Live View](https://raw.githubusercontent.com/sfc-gh-obielov/sfguide-aviation-ops-intelligence/main/assets/live_view.png)
-
 - **Real-time Flight Tracking**: Live ADS-B ingestion every minute
 - **Historical Backfill**: Automated download of historical ADS-B data from GitHub releases
 - **Flight Schedule Integration**: Hourly ingestion from Aviationstack API with automated matching
@@ -13,6 +11,8 @@ A Snowflake-native solution for real-time aviation analytics using ADS-B flight 
 - **Runway Crossing Detection**: Identifies taxiing aircraft crossing runways
 - **Infrastructure Visualization**: Dynamic rendering of runways, taxiways, gates, and terminals
 - **Multi-Airport Support**: Deploy separate databases for multiple airports
+
+![Live View](https://raw.githubusercontent.com/sfc-gh-obielov/sfguide-aviation-ops-intelligence/main/assets/live_view.png)
 
 ---
 
