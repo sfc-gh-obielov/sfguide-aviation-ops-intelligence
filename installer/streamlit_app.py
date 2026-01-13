@@ -569,11 +569,80 @@ WHERE AIRLINE_IATA IS NOT NULL
   AND LENGTH(TRIM(AIRLINE_ICAO)) IN (2,3)
 GROUP BY 1, 2;
 
+-- -----------------------------------------------------------------------------
+-- 8. FLIGHT_SCHEDULE tables (always created, even without API key)
+-- -----------------------------------------------------------------------------
+-- Raw schedule table (Bronze layer)
+CREATE TABLE IF NOT EXISTS {database}.{schema}.HELPER_FLIGHT_SCHEDULE_RAW (
+    flight_date DATE,
+    flight_status VARCHAR(32),
+    departure_airport VARCHAR(8),
+    departure_scheduled TIMESTAMP_NTZ,
+    departure_estimated TIMESTAMP_NTZ,
+    departure_actual TIMESTAMP_NTZ,
+    departure_delay INT,
+    departure_terminal VARCHAR(8),
+    departure_gate VARCHAR(8),
+    arrival_airport VARCHAR(8),
+    arrival_scheduled TIMESTAMP_NTZ,
+    arrival_estimated TIMESTAMP_NTZ,
+    arrival_actual TIMESTAMP_NTZ,
+    arrival_delay INT,
+    arrival_terminal VARCHAR(8),
+    arrival_gate VARCHAR(8),
+    airline_name VARCHAR(128),
+    airline_iata VARCHAR(8),
+    airline_icao VARCHAR(8),
+    flight_number VARCHAR(16),
+    flight_iata VARCHAR(16),
+    flight_icao VARCHAR(16),
+    aircraft_registration VARCHAR(16),
+    aircraft_iata VARCHAR(8),
+    aircraft_icao VARCHAR(8),
+    codeshared_airline VARCHAR(128),
+    codeshared_flight_iata VARCHAR(16),
+    raw_json VARIANT,
+    ingested_at TIMESTAMP_NTZ DEFAULT CURRENT_TIMESTAMP()
+);
+
+-- Canonical schedule table (Silver layer)
+CREATE TABLE IF NOT EXISTS {database}.{schema}.FLIGHT_SCHEDULE (
+    FLIGHT_KEY VARCHAR(128),
+    FLIGHT_DATE DATE,
+    FLIGHT_STATUS VARCHAR(32),
+    DEPARTURE_AIRPORT VARCHAR(8),
+    ARRIVAL_AIRPORT VARCHAR(8),
+    DEPARTURE_SCHEDULED TIMESTAMP_NTZ,
+    DEPARTURE_ESTIMATED TIMESTAMP_NTZ,
+    DEPARTURE_ACTUAL TIMESTAMP_NTZ,
+    DEPARTURE_DELAY INT,
+    DEPARTURE_TERMINAL VARCHAR(8),
+    DEPARTURE_GATE VARCHAR(8),
+    ARRIVAL_SCHEDULED TIMESTAMP_NTZ,
+    ARRIVAL_ESTIMATED TIMESTAMP_NTZ,
+    ARRIVAL_ACTUAL TIMESTAMP_NTZ,
+    ARRIVAL_DELAY INT,
+    ARRIVAL_TERMINAL VARCHAR(8),
+    ARRIVAL_GATE VARCHAR(8),
+    AIRLINE_NAME VARCHAR(128),
+    AIRLINE_IATA VARCHAR(8),
+    AIRLINE_ICAO VARCHAR(8),
+    FLIGHT_NUMBER VARCHAR(16),
+    FLIGHT_IATA VARCHAR(16),
+    FLIGHT_ICAO VARCHAR(16),
+    AIRCRAFT_REGISTRATION VARCHAR(16),
+    IS_CODESHARE BOOLEAN,
+    CREATED_AT TIMESTAMP_NTZ DEFAULT CURRENT_TIMESTAMP(),
+    UPDATED_AT TIMESTAMP_NTZ DEFAULT CURRENT_TIMESTAMP()
+);
+
 -- Verify
 SELECT 'PROPERTIES_AIRPORT' AS tbl, COUNT(*) AS cnt FROM {database}.{schema}.PROPERTIES_AIRPORT
 UNION ALL SELECT 'PROPERTIES_INFRASTRUCTURE', COUNT(*) FROM {database}.{schema}.PROPERTIES_INFRASTRUCTURE
 UNION ALL SELECT 'PROPERTIES_GATES', COUNT(*) FROM {database}.{schema}.PROPERTIES_GATES
-UNION ALL SELECT 'PROPERTIES_RUNWAYS', COUNT(*) FROM {database}.{schema}.PROPERTIES_RUNWAYS;
+UNION ALL SELECT 'PROPERTIES_RUNWAYS', COUNT(*) FROM {database}.{schema}.PROPERTIES_RUNWAYS
+UNION ALL SELECT 'HELPER_FLIGHT_SCHEDULE_RAW', COUNT(*) FROM {database}.{schema}.HELPER_FLIGHT_SCHEDULE_RAW
+UNION ALL SELECT 'FLIGHT_SCHEDULE', COUNT(*) FROM {database}.{schema}.FLIGHT_SCHEDULE;
 """
 
 
@@ -3924,17 +3993,24 @@ if (fresh !== 1) {{
   throw `Smoke check failed: ADSB_DATA_LOCAL appears stale (no points in last 2 hours). max_ts=${{maxTs}}`;
 }}
 
-// Flight schedule: should have rows in the current install window (+/-2 days)
+// Flight schedule: check if data exists (optional, may be empty if no API key provided)
 var schedCnt = scalar(`SELECT COUNT(*) FROM {database}.{schema}.FLIGHT_SCHEDULE WHERE FLIGHT_DATE BETWEEN DATEADD('day', -2, CURRENT_DATE()) AND DATEADD('day', 2, CURRENT_DATE())`);
-if (schedCnt === 0) {{
-  throw `Smoke check failed: FLIGHT_SCHEDULE has 0 rows in +/-2 day window`;
+// Note: schedule may be empty if API key was not provided during install
+
+// Tasks should be STARTED (check for flight schedule task separately)
+snowflake.createStatement({{sqlText: `SHOW TASKS IN SCHEMA {database}.{schema}`}}).execute();
+var schedTaskExists = scalar(`SELECT COUNT_IF(\"name\"='TASK_FLIGHT_SCHEDULE_HOURLY') FROM TABLE(RESULT_SCAN(LAST_QUERY_ID()))`);
+var requiredTasksRunning = scalar(`SELECT COUNT_IF(LOWER(\"state\")='started' AND \"name\" IN ('TASK_INGEST_ADSB','TASK_ENRICH_ADSB_HOURLY','TASK_REFRESH_DERIVED_15MIN')) FROM TABLE(RESULT_SCAN(LAST_QUERY_ID()))`);
+var schedTaskRunning = scalar(`SELECT COUNT_IF(LOWER(\"state\")='started' AND \"name\"='TASK_FLIGHT_SCHEDULE_HOURLY') FROM TABLE(RESULT_SCAN(LAST_QUERY_ID()))`);
+
+// Core tasks (ADS-B ingestion, enrichment, derived refresh) must be running
+if (requiredTasksRunning < 3) {{
+  throw `Smoke check failed: not all core ADS-B tasks are STARTED (started=${{requiredTasksRunning}}/3)`;
 }}
 
-// Tasks should be STARTED
-snowflake.createStatement({{sqlText: `SHOW TASKS IN SCHEMA {database}.{schema}`}}).execute();
-var startedCnt = scalar(`SELECT COUNT_IF(LOWER(\"state\")='started' AND \"name\" IN ('TASK_INGEST_ADSB','TASK_ENRICH_ADSB_HOURLY','TASK_FLIGHT_SCHEDULE_HOURLY','TASK_REFRESH_DERIVED_15MIN')) FROM TABLE(RESULT_SCAN(LAST_QUERY_ID()))`);
-if (startedCnt < 4) {{
-  throw `Smoke check failed: not all core tasks are STARTED (started=${{startedCnt}}/4)`; 
+// Flight schedule task is optional (only exists if API key was provided)
+if (schedTaskExists > 0 && schedTaskRunning === 0) {{
+  throw `Smoke check failed: TASK_FLIGHT_SCHEDULE_HOURLY exists but is not STARTED`; 
 }}
 
 return 'OK';
@@ -3963,7 +4039,9 @@ UNION ALL SELECT 'FLIGHT_TRAFFIC_FACT_ADSB_HOURLY', COUNT(*) FROM {database}.{sc
 UNION ALL SELECT 'FLIGHT_TRACKER_FLIGHT_LIST', COUNT(*) FROM {database}.{schema}.FLIGHT_TRACKER_FLIGHT_LIST
 UNION ALL SELECT 'FLIGHT_TRAFFIC_FACT_AIRLINE_TRAFFIC_DAILY', COUNT(*) FROM {database}.{schema}.FLIGHT_TRAFFIC_FACT_AIRLINE_TRAFFIC_DAILY
 UNION ALL SELECT 'FLIGHT_TRAFFIC_FACT_AIRLINE_DELAY_DAILY', COUNT(*) FROM {database}.{schema}.FLIGHT_TRAFFIC_FACT_AIRLINE_DELAY_DAILY
-UNION ALL SELECT 'RUNWAY_CROSSINGS_DETAILED', COUNT(*) FROM {database}.{schema}.RUNWAY_CROSSINGS_DETAILED;
+UNION ALL SELECT 'RUNWAY_CROSSINGS_DETAILED', COUNT(*) FROM {database}.{schema}.RUNWAY_CROSSINGS_DETAILED
+UNION ALL SELECT 'FLIGHT_SCHEDULE', COUNT(*) FROM {database}.{schema}.FLIGHT_SCHEDULE
+UNION ALL SELECT 'HELPER_FLIGHT_SCHEDULE_RAW', COUNT(*) FROM {database}.{schema}.HELPER_FLIGHT_SCHEDULE_RAW;
 
 -- =============================================================================
 -- START AUTOMATED TASKS
@@ -3975,8 +4053,8 @@ ALTER TASK {database}.{schema}.TASK_INGEST_ADSB RESUME;
 -- Start ADS-B enrichment task (adds schedule flight number/key to points)
 ALTER TASK {database}.{schema}.TASK_ENRICH_ADSB_HOURLY RESUME;
 
--- Start the flight schedule task (hourly updates)
-ALTER TASK {database}.{schema}.TASK_FLIGHT_SCHEDULE_HOURLY RESUME;
+-- Note: TASK_FLIGHT_SCHEDULE_HOURLY is resumed in 04_flight_schedule_v5.sql
+-- (only exists if API key was provided during install)
 
 -- Start derived refresh (15 min)
 ALTER TASK {database}.{schema}.TASK_REFRESH_DERIVED_15MIN RESUME;
@@ -4056,76 +4134,11 @@ CREATE OR REPLACE EXTERNAL ACCESS INTEGRATION {eai_aviationstack}
   ENABLED = TRUE;
 
 -- -----------------------------------------------------------------------------
--- Raw table (Bronze layer)
+-- Note: HELPER_FLIGHT_SCHEDULE_RAW and FLIGHT_SCHEDULE tables are created
+-- in 01_base_v5.sql to ensure they exist even if API key is not provided.
+-- This allows the installer to complete successfully without an API key.
 -- -----------------------------------------------------------------------------
-CREATE OR REPLACE TABLE {database}.{schema}.HELPER_FLIGHT_SCHEDULE_RAW (
-    flight_date DATE,
-    flight_status VARCHAR(32),
-    departure_airport VARCHAR(8),
-    departure_scheduled TIMESTAMP_NTZ,
-    departure_estimated TIMESTAMP_NTZ,
-    departure_actual TIMESTAMP_NTZ,
-    departure_delay INT,
-    departure_terminal VARCHAR(8),
-    departure_gate VARCHAR(8),
-    arrival_airport VARCHAR(8),
-    arrival_scheduled TIMESTAMP_NTZ,
-    arrival_estimated TIMESTAMP_NTZ,
-    arrival_actual TIMESTAMP_NTZ,
-    arrival_delay INT,
-    arrival_terminal VARCHAR(8),
-    arrival_gate VARCHAR(8),
-    airline_name VARCHAR(128),
-    airline_iata VARCHAR(8),
-    airline_icao VARCHAR(8),
-    flight_number VARCHAR(16),
-    flight_iata VARCHAR(16),
-    flight_icao VARCHAR(16),
-    aircraft_registration VARCHAR(16),
-    aircraft_iata VARCHAR(8),
-    aircraft_icao VARCHAR(8),
-    codeshared_airline VARCHAR(128),
-    codeshared_flight_iata VARCHAR(16),
-    raw_json VARIANT,
-    ingested_at TIMESTAMP_NTZ DEFAULT CURRENT_TIMESTAMP()
-);
 
--- -----------------------------------------------------------------------------
--- Silver table (cleaned)
--- -----------------------------------------------------------------------------
-CREATE OR REPLACE TABLE {database}.{schema}.FLIGHT_SCHEDULE (
-    FLIGHT_KEY VARCHAR(128),
-    FLIGHT_DATE DATE,
-    FLIGHT_STATUS VARCHAR(32),
-    DEPARTURE_AIRPORT VARCHAR(8),
-    ARRIVAL_AIRPORT VARCHAR(8),
-    DEPARTURE_SCHEDULED TIMESTAMP_NTZ,
-    DEPARTURE_ESTIMATED TIMESTAMP_NTZ,
-    DEPARTURE_ACTUAL TIMESTAMP_NTZ,
-    DEPARTURE_DELAY INT,
-    DEPARTURE_TERMINAL VARCHAR(8),
-    DEPARTURE_GATE VARCHAR(8),
-    ARRIVAL_SCHEDULED TIMESTAMP_NTZ,
-    ARRIVAL_ESTIMATED TIMESTAMP_NTZ,
-    ARRIVAL_ACTUAL TIMESTAMP_NTZ,
-    ARRIVAL_DELAY INT,
-    ARRIVAL_TERMINAL VARCHAR(8),
-    ARRIVAL_GATE VARCHAR(8),
-    AIRLINE_NAME VARCHAR(128),
-    AIRLINE_IATA VARCHAR(8),
-    AIRLINE_ICAO VARCHAR(8),
-    FLIGHT_NUMBER VARCHAR(16),
-    FLIGHT_IATA VARCHAR(16),
-    FLIGHT_ICAO VARCHAR(16),
-    AIRCRAFT_REGISTRATION VARCHAR(16),
-    IS_CODESHARE BOOLEAN,
-    UPDATED_AT TIMESTAMP_NTZ DEFAULT CURRENT_TIMESTAMP()
-);
-
--- Compatibility view
--- FLIGHT_SCHEDULE is the canonical schedule source of truth (table).
-
--- (Removed) FLIGHT_SCHEDULE_COMPAT: dashboards now use FLIGHT_SCHEDULE directly.
 -- -----------------------------------------------------------------------------
 -- Ingestion Procedure
 -- -----------------------------------------------------------------------------
@@ -4431,16 +4444,18 @@ CREATE OR REPLACE TASK {database}.{schema}.TASK_FLIGHT_SCHEDULE_HOURLY
 AS
   CALL {database}.{schema}.PROC_FLIGHT_SCHEDULE_INGEST_AND_ETL();
 
--- Task is created SUSPENDED. To start:
--- ALTER TASK {database}.{schema}.TASK_FLIGHT_SCHEDULE_HOURLY RESUME;
-
 -- -----------------------------------------------------------------------------
 -- RUN INITIAL BACKFILL (window: last 2 days + next 2 days)
 -- -----------------------------------------------------------------------------
 CALL {database}.{schema}.PROC_BACKFILL_FLIGHT_SCHEDULE_WINDOW({backfill_days}, 2);
 
+-- -----------------------------------------------------------------------------
+-- START THE TASK
+-- -----------------------------------------------------------------------------
+ALTER TASK {database}.{schema}.TASK_FLIGHT_SCHEDULE_HOURLY RESUME;
+
 -- Verify
-SELECT 'Setup complete' AS status;
+SELECT 'Flight schedule setup complete. Task is now running.' AS status;
 """
 
 
@@ -4663,6 +4678,8 @@ def main():
             "`OVERTURE_MAPS__BASE.CARTO.INFRASTRUCTURE`.\n\n"
             "Before running the installer, install these Snowflake Marketplace listings:\n"
             "- [Overture Maps - Base](https://app.snowflake.com/marketplace/listing/GZT0Z4CM1E9KV/carto-overture-maps-base)\n"
+            "- [Overture Maps - Buildings](https://app.snowflake.com/marketplace/listing/GZT0Z4CM1E9KN/carto-overture-maps-buildings)\n"
+            "- [Overture Maps - Transportation](https://app.snowflake.com/marketplace/listing/GZT0Z4CM1E9KJ/carto-overture-maps-transportation)\n"
         )
         return
     

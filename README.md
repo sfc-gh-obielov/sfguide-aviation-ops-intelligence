@@ -67,7 +67,6 @@ CREATE API INTEGRATION IF NOT EXISTS github_api_integration
 CREATE OR REPLACE GIT REPOSITORY avia_ops_repo
   API_INTEGRATION = github_api_integration
   ORIGIN = 'https://github.com/sfc-gh-obielov/sfguide-aviation-ops-intelligence';
-  -- Note: GIT_CREDENTIALS parameter is OPTIONAL and only needed for private repositories
 
 -- Step 4: Fetch latest files from repository
 ALTER GIT REPOSITORY avia_ops_repo FETCH;
