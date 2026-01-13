@@ -40,6 +40,11 @@ A Snowflake-native solution for real-time aviation analytics using ADS-B flight 
    - Basic tier: 10000 requests/month (sufficient for several airports)
    - Paid tier recommended for production
 
+<img src="https://github.com/sfc-gh-obielov/sfguide-aviation-ops-intelligence/blob/main/assets/installer.gif" alt="Installer demo" width="700" />
+
+
+---
+
 ## 🚀 Deployment 
 
 Execute these queries in a Snowflake workworkspaces (replace placeholders):
