@@ -1,0 +1,4 @@
+*.pyc
+installer/aviationstack_api_key.txt
+.DS_Store
+dashboard/.DS_Store
