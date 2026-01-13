@@ -103,6 +103,8 @@ SHOW STREAMLITS LIKE 'airport_analytics_%';
 
 ### 1. Run the Installer
 
+https://github.com/sfc-gh-obielov/sfguide-aviation-ops-intelligence/raw/refs/heads/main/assets/installer.mp4
+
 1. Open the **Installer** Streamlit app
 2. Select an airport from the dropdown (searches Overture Maps international airports)
 3. Configure settings:
